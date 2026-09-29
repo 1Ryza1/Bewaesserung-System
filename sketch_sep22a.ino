@@ -44,9 +44,6 @@ const byte RELAY_PIN  = 8;
 // =====================================================
 // RELAIS-LOGIK
 // =====================================================
-//
-// Unser Relais ist LOW-aktiv.
-//
 
 const byte RELAY_AN  = LOW;
 const byte RELAY_AUS = HIGH;
@@ -63,40 +60,24 @@ Adafruit_SH1106G display(128, 64, &Wire);
 // BODEN-KALIBRIERUNG
 // =====================================================
 //
-// Gemessen:
-//
 // ca. 1020 = knochentrocken
 // ca. 700  = Bewaesserung starten
 // ca. 350  = Ziel erreicht
 //
-// Prozentanzeige:
-//
-// 1020 = 0 %
-// 350  = 100 %
+// Die Werte fuer Start und Ziel
+// koennen ueber das Menue veraendert werden.
 //
 
 const int SOIL_TROCKEN = 1020;
 const int SOIL_NASS    = 350;
 
-const int SOIL_START   = 700;
-const int SOIL_ZIEL    = 350;
+int SOIL_START = 700;
+int SOIL_ZIEL  = 350;
 
 
 // =====================================================
 // TANK-KALIBRIERUNG
 // =====================================================
-//
-// Vorlaeufig:
-//
-// 0   = 0 %
-// 500 = 100 %
-//
-// Tank leer:
-// <100
-//
-// Wasser vorhanden:
-// >200
-//
 
 const int TANK_MIN = 0;
 const int TANK_MAX = 500;
@@ -109,14 +90,11 @@ const int TANK_WASSER = 200;
 // BEWAESSERUNG
 // =====================================================
 
-// Eine Pumpenrunde = 5 Sekunden
+// Einstellbar ueber das Menue
 
-const unsigned long PUMP_DAUER = 5000;
+unsigned long PUMP_DAUER = 5000;
 
-
-// Danach 20 Sekunden warten
-
-const unsigned long WARTEZEIT = 20000;
+unsigned long WARTEZEIT = 20000;
 
 
 // Maximal 5 Pumpenrunden pro Bewaesserung
@@ -177,6 +155,25 @@ const byte MENU_SEITEN = 3;
 
 
 // =====================================================
+// EINSTELLUNGSMENUE
+// =====================================================
+//
+// 0 = Boden Start
+// 1 = Boden Ziel
+// 2 = Pumpendauer
+// 3 = Wartezeit
+//
+
+bool einstellungsMenue = false;
+
+byte einstellungsSeite = 0;
+
+const byte EINSTELLUNGEN_ANZAHL = 4;
+
+const unsigned long BUTTON_LANG = 1500;
+
+
+// =====================================================
 // TASTER
 // =====================================================
 
@@ -186,6 +183,13 @@ bool buttonStatus      = HIGH;
 unsigned long letzteButtonAenderung = 0;
 
 const unsigned long BUTTON_DEBOUNCE = 40;
+
+
+// Fuer Kurz-/Langdruck
+
+bool buttonGedrueckt = false;
+
+unsigned long buttonStartZeit = 0;
 
 
 // =====================================================
@@ -211,10 +215,47 @@ Statistik statistik;
 
 
 // =====================================================
+// EINSTELLUNGEN / EEPROM
+// =====================================================
+
+const uint16_t EINSTELLUNGEN_MAGIC = 0xCAFE;
+
+
+struct Einstellungen {
+
+  uint16_t magic;
+
+  int soilStart;
+
+  int soilZiel;
+
+  unsigned long pumpDauer;
+
+  unsigned long wartezeit;
+};
+
+
+// Die Einstellungen beginnen direkt nach der Statistik
+
+const int EEPROM_EINSTELLUNGEN_ADRESSE = sizeof(Statistik);
+
+
+Einstellungen einstellungen;
+
+
+// =====================================================
 // FUNKTIONSDEKLARATION
 // =====================================================
 
 void oledAktualisieren();
+
+void einstellungenAnzeigen();
+
+void einstellungErhoehen();
+
+void einstellungenSpeichern();
+
+void einstellungenLaden();
 
 
 // =====================================================
@@ -225,8 +266,6 @@ void statistikLaden() {
 
   EEPROM.get(0, statistik);
 
-
-  // Wenn noch keine gueltige Statistik vorhanden ist
 
   if (statistik.magic != EEPROM_MAGIC) {
 
@@ -251,6 +290,91 @@ void statistikLaden() {
 void statistikSpeichern() {
 
   EEPROM.put(0, statistik);
+}
+
+
+// =====================================================
+// EINSTELLUNGEN LADEN
+// =====================================================
+
+void einstellungenLaden() {
+
+  EEPROM.get(
+    EEPROM_EINSTELLUNGEN_ADRESSE,
+    einstellungen
+  );
+
+
+  // ---------------------------------------------------
+  // Pruefen, ob gueltige Einstellungen vorhanden sind
+  // ---------------------------------------------------
+
+  if (
+    einstellungen.magic != EINSTELLUNGEN_MAGIC ||
+
+    einstellungen.soilStart < 25 ||
+    einstellungen.soilStart > 1000 ||
+
+    einstellungen.soilZiel < 0 ||
+    einstellungen.soilZiel >= einstellungen.soilStart ||
+
+    einstellungen.pumpDauer < 1000 ||
+    einstellungen.pumpDauer > 30000 ||
+
+    einstellungen.wartezeit < 5000 ||
+    einstellungen.wartezeit > 60000
+  ) {
+
+    einstellungen.magic = EINSTELLUNGEN_MAGIC;
+
+    einstellungen.soilStart = 700;
+
+    einstellungen.soilZiel = 350;
+
+    einstellungen.pumpDauer = 5000;
+
+    einstellungen.wartezeit = 20000;
+
+
+    einstellungenSpeichern();
+  }
+
+
+  // ---------------------------------------------------
+  // Werte ins Programm uebernehmen
+  // ---------------------------------------------------
+
+  SOIL_START = einstellungen.soilStart;
+
+  SOIL_ZIEL = einstellungen.soilZiel;
+
+  PUMP_DAUER = einstellungen.pumpDauer;
+
+  WARTEZEIT = einstellungen.wartezeit;
+}
+
+
+// =====================================================
+// EINSTELLUNGEN SPEICHERN
+// =====================================================
+
+void einstellungenSpeichern() {
+
+  einstellungen.magic = EINSTELLUNGEN_MAGIC;
+
+  einstellungen.soilStart = SOIL_START;
+
+  einstellungen.soilZiel = SOIL_ZIEL;
+
+  einstellungen.pumpDauer = PUMP_DAUER;
+
+  einstellungen.wartezeit = WARTEZEIT;
+
+
+  EEPROM.put(
+    EEPROM_EINSTELLUNGEN_ADRESSE,
+    einstellungen
+  );
 }
 
 
@@ -294,21 +418,16 @@ void tankMessen() {
   tankWert = mittelwert(TANK_PIN);
 
 
-  // Tank eindeutig leer
-
   if (tankWert < TANK_LEER) {
 
     tankOK = false;
   }
 
 
-  // Wasser eindeutig vorhanden
-
   else if (tankWert > TANK_WASSER) {
 
     tankOK = true;
   }
-
 
   // Zwischen 100 und 200:
   // vorherigen Zustand behalten
@@ -392,13 +511,6 @@ void pumpeAus() {
 // =====================================================
 // WARN-LED
 // =====================================================
-//
-// Tank OK:
-// LED AUS
-//
-// Tank leer:
-// LED blinkt alle 500 ms
-//
 
 void ledAktualisieren() {
 
@@ -483,52 +595,169 @@ void statusAusgeben() {
 
 
 // =====================================================
+// BALKENDIAGRAMM
+// =====================================================
+//
+// Der Balken ist ein durchgehender Balken.
+//
+// 0 %:
+// [--------------------]
+//
+// 50 %:
+// [##########----------]
+//
+// 100 %:
+// [####################]
+//
+// Der Prozentwert steht ausserhalb des Balkens.
+//
+
+void balkenZeichnen(
+  int x,
+  int y,
+  int breite,
+  int hoehe,
+  int prozent
+) {
+
+  // ---------------------------------------------------
+  // Begrenzung
+  // ---------------------------------------------------
+
+  prozent = constrain(prozent, 0, 100);
+
+
+  // ---------------------------------------------------
+  // Rahmen
+  // ---------------------------------------------------
+
+  display.drawRect(
+    x,
+    y,
+    breite,
+    hoehe,
+    SH110X_WHITE
+  );
+
+
+  // ---------------------------------------------------
+  // Fuellung berechnen
+  // ---------------------------------------------------
+
+  int fuellBreite = map(
+    prozent,
+    0,
+    100,
+    0,
+    breite - 2
+  );
+
+
+  // ---------------------------------------------------
+  // Balken fuellen
+  // ---------------------------------------------------
+
+  if (fuellBreite > 0) {
+
+    display.fillRect(
+      x + 1,
+      y + 1,
+      fuellBreite,
+      hoehe - 2,
+      SH110X_WHITE
+    );
+  }
+}
+
+
+// =====================================================
 // OLED SEITE 1
 // UEBERSICHT
 // =====================================================
 
 void oledUebersicht() {
 
+  int boden = bodenProzent();
+
+  int tank = tankProzent();
+
+
+  // ===================================================
+  // BODEN
+  // ===================================================
+
   display.setCursor(0, 0);
 
-  display.print(F("Boden: "));
-
-  display.print(bodenProzent());
-
-  display.println(F("%"));
+  display.println(F("BODENFEUCHTE"));
 
 
-  display.setCursor(0, 14);
+  // Balken
 
-  display.print(F("Tank:  "));
-
-  display.print(tankProzent());
-
-  display.println(F("%"));
-
-
-  display.setCursor(0, 28);
-
-  display.print(F("Pumpe: "));
+  balkenZeichnen(
+    0,
+    11,
+    102,
+    9,
+    boden
+  );
 
 
-  if (pumpeAN) {
+  // Prozent rechts neben dem Balken
 
-    display.println(F("AN"));
-  }
+  display.setCursor(106, 11);
 
-  else {
+  display.print(boden);
 
-    display.println(F("AUS"));
-  }
+  display.print(F("%"));
 
 
-  display.setCursor(0, 42);
+  // ===================================================
+  // TANK
+  // ===================================================
 
-  display.println(F("---------------------"));
+  display.setCursor(0, 25);
+
+  display.println(F("TANK"));
 
 
-  display.setCursor(0, 54);
+  // Balken
+
+  balkenZeichnen(
+    0,
+    36,
+    102,
+    9,
+    tank
+  );
+
+
+  // Prozent rechts neben dem Balken
+
+  display.setCursor(106, 36);
+
+  display.print(tank);
+
+  display.print(F("%"));
+
+
+  // ===================================================
+  // TRENNLINIE
+  // ===================================================
+
+  display.drawLine(
+    0,
+    49,
+    127,
+    49,
+    SH110X_WHITE
+  );
+
+
+  // ===================================================
+  // STATUS
+  // ===================================================
+
+  display.setCursor(0, 55);
 
   statusAusgeben();
 }
@@ -609,6 +838,142 @@ void oledRohwerte() {
 
 
 // =====================================================
+// OLED EINSTELLUNGEN
+// =====================================================
+
+void einstellungenAnzeigen() {
+
+  display.clearDisplay();
+
+  display.setTextSize(1);
+
+  display.setTextColor(SH110X_WHITE);
+
+
+  display.setCursor(0, 0);
+
+  display.print(F("EINSTELLUNGEN "));
+
+  display.print(einstellungsSeite + 1);
+
+  display.print(F("/4"));
+
+
+  display.setCursor(0, 15);
+
+
+  switch (einstellungsSeite) {
+
+    // -------------------------------------------------
+    // Boden Start
+    // -------------------------------------------------
+
+    case 0:
+
+      display.println(F("Boden Start"));
+
+      display.setCursor(0, 31);
+
+      display.print(F("Wert: "));
+
+      display.println(SOIL_START);
+
+      display.setCursor(0, 47);
+
+      display.print(F("+25"));
+
+      display.setCursor(75, 47);
+
+      display.print(F("Lang = weiter"));
+
+      break;
+
+
+    // -------------------------------------------------
+    // Boden Ziel
+    // -------------------------------------------------
+
+    case 1:
+
+      display.println(F("Boden Ziel"));
+
+      display.setCursor(0, 31);
+
+      display.print(F("Wert: "));
+
+      display.println(SOIL_ZIEL);
+
+      display.setCursor(0, 47);
+
+      display.print(F("+25"));
+
+      display.setCursor(75, 47);
+
+      display.print(F("Lang = weiter"));
+
+      break;
+
+
+    // -------------------------------------------------
+    // Pumpendauer
+    // -------------------------------------------------
+
+    case 2:
+
+      display.println(F("Pumpendauer"));
+
+      display.setCursor(0, 31);
+
+      display.print(F("Wert: "));
+
+      display.print(PUMP_DAUER / 1000);
+
+      display.println(F(" s"));
+
+      display.setCursor(0, 47);
+
+      display.print(F("+1 s"));
+
+      display.setCursor(75, 47);
+
+      display.print(F("Lang = weiter"));
+
+      break;
+
+
+    // -------------------------------------------------
+    // Wartezeit
+    // -------------------------------------------------
+
+    case 3:
+
+      display.println(F("Wartezeit"));
+
+      display.setCursor(0, 31);
+
+      display.print(F("Wert: "));
+
+      display.print(WARTEZEIT / 1000);
+
+      display.println(F(" s"));
+
+      display.setCursor(0, 47);
+
+      display.print(F("+5 s"));
+
+      display.setCursor(75, 47);
+
+      display.print(F("Lang = speichern"));
+
+      break;
+  }
+
+
+  display.display();
+}
+
+
+// =====================================================
 // OLED AKTUALISIEREN
 // =====================================================
 
@@ -619,6 +984,14 @@ void oledAktualisieren() {
   display.setTextSize(1);
 
   display.setTextColor(SH110X_WHITE);
+
+
+  if (einstellungsMenue) {
+
+    einstellungenAnzeigen();
+
+    return;
+  }
 
 
   switch (menuSeite) {
@@ -650,13 +1023,122 @@ void oledAktualisieren() {
 
 
 // =====================================================
-// MENUE-TASTER
+// EINSTELLUNG ERHOEHEN
+// =====================================================
+
+void einstellungErhoehen() {
+
+  switch (einstellungsSeite) {
+
+    // -------------------------------------------------
+    // Boden Start
+    // -------------------------------------------------
+
+    case 0:
+
+      SOIL_START += 25;
+
+
+      if (SOIL_START > 1000) {
+
+        SOIL_START = 25;
+      }
+
+
+      if (SOIL_START <= SOIL_ZIEL) {
+
+        SOIL_START = SOIL_ZIEL + 25;
+      }
+
+
+      if (SOIL_START > 1000) {
+
+        SOIL_START = 1000;
+      }
+
+      break;
+
+
+    // -------------------------------------------------
+    // Boden Ziel
+    // -------------------------------------------------
+
+    case 1:
+
+      SOIL_ZIEL += 25;
+
+
+      if (SOIL_ZIEL > 975) {
+
+        SOIL_ZIEL = 0;
+      }
+
+
+      if (SOIL_ZIEL >= SOIL_START) {
+
+        SOIL_ZIEL = SOIL_START - 25;
+      }
+
+
+      if (SOIL_ZIEL < 0) {
+
+        SOIL_ZIEL = 0;
+      }
+
+      break;
+
+
+    // -------------------------------------------------
+    // Pumpendauer
+    // -------------------------------------------------
+
+    case 2:
+
+      PUMP_DAUER += 1000;
+
+
+      if (PUMP_DAUER > 30000) {
+
+        PUMP_DAUER = 1000;
+      }
+
+      break;
+
+
+    // -------------------------------------------------
+    // Wartezeit
+    // -------------------------------------------------
+
+    case 3:
+
+      WARTEZEIT += 5000;
+
+
+      if (WARTEZEIT > 60000) {
+
+        WARTEZEIT = 5000;
+      }
+
+      break;
+  }
+
+
+  einstellungenAnzeigen();
+}
+
+
+// =====================================================
+// TASTER
 // =====================================================
 
 void buttonAktualisieren() {
 
   bool aktuellerWert = digitalRead(BUTTON_PIN);
 
+
+  // ---------------------------------------------------
+  // Aenderung erkannt
+  // ---------------------------------------------------
 
   if (aktuellerWert != letzterButtonWert) {
 
@@ -666,29 +1148,137 @@ void buttonAktualisieren() {
   }
 
 
-  // Entprellzeit
+  // ---------------------------------------------------
+  // Entprellzeit abgelaufen
+  // ---------------------------------------------------
 
-  if (millis() - letzteButtonAenderung > BUTTON_DEBOUNCE) {
+  if (
+    millis() - letzteButtonAenderung >
+    BUTTON_DEBOUNCE
+  ) {
 
     if (aktuellerWert != buttonStatus) {
 
       buttonStatus = aktuellerWert;
 
 
-      // Taster wurde gedrueckt
+      // ===============================================
+      // TASTER GEDRUECKT
+      // ===============================================
 
       if (buttonStatus == LOW) {
 
-        menuSeite++;
+        buttonGedrueckt = true;
+
+        buttonStartZeit = millis();
+      }
 
 
-        if (menuSeite >= MENU_SEITEN) {
+      // ===============================================
+      // TASTER LOSGELASSEN
+      // ===============================================
 
-          menuSeite = 0;
+      else {
+
+        if (buttonGedrueckt) {
+
+          buttonGedrueckt = false;
+
+
+          unsigned long drueckDauer =
+            millis() - buttonStartZeit;
+
+
+          // ===========================================
+          // LANGDRUCK
+          // ===========================================
+
+          if (drueckDauer >= BUTTON_LANG) {
+
+            // -----------------------------------------
+            // Normalmodus
+            // -----------------------------------------
+
+            if (!einstellungsMenue) {
+
+              if (!pumpeAN) {
+
+                einstellungsMenue = true;
+
+                einstellungsSeite = 0;
+
+                einstellungenAnzeigen();
+              }
+            }
+
+
+            // -----------------------------------------
+            // Einstellungsmenue
+            // -----------------------------------------
+
+            else {
+
+              einstellungsSeite++;
+
+
+              if (
+                einstellungsSeite >=
+                EINSTELLUNGEN_ANZAHL
+              ) {
+
+                einstellungenSpeichern();
+
+                einstellungsMenue = false;
+
+                einstellungsSeite = 0;
+
+
+                oledAktualisieren();
+              }
+
+              else {
+
+                einstellungenAnzeigen();
+              }
+            }
+          }
+
+
+          // ===========================================
+          // KURZDRUCK
+          // ===========================================
+
+          else {
+
+            // -----------------------------------------
+            // Einstellungsmenue
+            // -----------------------------------------
+
+            if (einstellungsMenue) {
+
+              einstellungErhoehen();
+            }
+
+
+            // -----------------------------------------
+            // Normalmodus
+            // -----------------------------------------
+
+            else {
+
+              menuSeite++;
+
+
+              if (menuSeite >= MENU_SEITEN) {
+
+                menuSeite = 0;
+              }
+
+
+              oledAktualisieren();
+            }
+          }
         }
-
-
-        oledAktualisieren();
       }
     }
   }
@@ -698,10 +1288,6 @@ void buttonAktualisieren() {
 // =====================================================
 // WARTEFUNKTION
 // =====================================================
-//
-// Taster und LED funktionieren auch waehrend
-// der Wartezeit weiter.
-//
 
 void wartenMitBedienung(unsigned long dauer) {
 
@@ -828,7 +1414,7 @@ bool giessen() {
 
 
   // ---------------------------------------------------
-  // 5 Sekunden pumpen
+  // Pumpen
   // ---------------------------------------------------
 
   while (millis() - start < PUMP_DAUER) {
@@ -855,7 +1441,8 @@ bool giessen() {
 
       if (!tankOK) {
 
-        unsigned long laufzeit = millis() - start;
+        unsigned long laufzeit =
+          millis() - start;
 
 
         pumpeAus();
@@ -916,7 +1503,7 @@ bool wartenNachGiessen() {
   oledAktualisieren();
 
 
-  Serial.println(F("20 Sekunden warten..."));
+  Serial.println(F("Warten..."));
 
 
   unsigned long start = millis();
@@ -987,7 +1574,11 @@ void bewaessern() {
   bool giessVorgangGezaehlt = false;
 
 
-  for (byte runde = 1; runde <= MAX_RUNDEN; runde++) {
+  for (
+    byte runde = 1;
+    runde <= MAX_RUNDEN;
+    runde++
+  ) {
 
     allesMessen();
 
@@ -1055,8 +1646,7 @@ void bewaessern() {
 
 
     // -------------------------------------------------
-    // Erster Pumpvorgang =
-    // neuer Bewaesserungsvorgang
+    // Erster Pumpvorgang
     // -------------------------------------------------
 
     if (!giessVorgangGezaehlt) {
@@ -1068,7 +1658,7 @@ void bewaessern() {
 
 
     // -------------------------------------------------
-    // 5 Sekunden giessen
+    // Giessen
     // -------------------------------------------------
 
     if (!giessen()) {
@@ -1080,7 +1670,7 @@ void bewaessern() {
 
 
     // -------------------------------------------------
-    // 20 Sekunden warten
+    // Warten
     // -------------------------------------------------
 
     if (!wartenNachGiessen()) {
@@ -1167,13 +1757,6 @@ void setup() {
   // ===================================================
   // RELAIS SICHER AUSSCHALTEN
   // ===================================================
-  //
-  // Wichtig:
-  // Zuerst HIGH setzen und DANACH als OUTPUT definieren.
-  //
-  // Dadurch wird das LOW-aktive Relais beim Start
-  // moeglichst nicht versehentlich aktiviert.
-  //
 
   digitalWrite(RELAY_PIN, RELAY_AUS);
 
@@ -1203,6 +1786,13 @@ void setup() {
 
 
   // ---------------------------------------------------
+  // Einstellungen laden
+  // ---------------------------------------------------
+
+  einstellungenLaden();
+
+
+  // ---------------------------------------------------
   // I2C
   // ---------------------------------------------------
 
@@ -1222,8 +1812,6 @@ void setup() {
 
     Serial.println(F("OLED FEHLER"));
 
-
-    // Pumpe definitiv AUS
 
     pumpeAus();
 
@@ -1303,6 +1891,39 @@ void setup() {
   Serial.print(statistik.pumpSekunden);
 
   Serial.println(F(" Sekunden"));
+
+
+  // ---------------------------------------------------
+  // Einstellungen seriell
+  // ---------------------------------------------------
+
+  Serial.println();
+
+  Serial.println(F("EINSTELLUNGEN"));
+
+
+  Serial.print(F("Boden Start: "));
+
+  Serial.println(SOIL_START);
+
+
+  Serial.print(F("Boden Ziel: "));
+
+  Serial.println(SOIL_ZIEL);
+
+
+  Serial.print(F("Pumpendauer: "));
+
+  Serial.print(PUMP_DAUER / 1000);
+
+  Serial.println(F(" Sekunden"));
+
+
+  Serial.print(F("Wartezeit: "));
+
+  Serial.print(WARTEZEIT / 1000);
+
+  Serial.println(F(" Sekunden"));
 }
 
 
@@ -1311,6 +1932,24 @@ void setup() {
 // =====================================================
 
 void loop() {
+
+  // ---------------------------------------------------
+  // Einstellungsmenue
+  // ---------------------------------------------------
+
+  if (einstellungsMenue) {
+
+    pumpeAus();
+
+    buttonAktualisieren();
+
+    ledAktualisieren();
+
+    delay(5);
+
+    return;
+  }
+
 
   // ---------------------------------------------------
   // Sensoren messen
@@ -1340,8 +1979,6 @@ void loop() {
   // ===================================================
 
   if (!tankOK) {
-
-    // Pumpe MUSS aus sein
 
     pumpeAus();
 
