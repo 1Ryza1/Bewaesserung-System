@@ -1,0 +1,18 @@
+[Unit]
+Description=Arduino Bewaesserung - Messwerte und Webseite
+After=network.target
+[Service]
+User=admin
+Group=admin
+SupplementaryGroups=dialout
+WorkingDirectory=/home/admin/bewaesserung
+ExecStart=/usr/bin/python3 /home/admin/bewaesserung/app.py
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/admin/bewaesserung
+[Install]
+WantedBy=multi-user.target
