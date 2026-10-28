@@ -61,8 +61,8 @@ Adafruit_SH1106G display(128, 64, &Wire);
 // =====================================================
 //
 // ca. 1020 = knochentrocken
-// ca. 700  = Bewaesserung starten
-// ca. 350  = Ziel erreicht
+// ca. 950  = Bewaesserung starten
+// ca. 650  = Ziel erreicht
 //
 // Die Werte fuer Start und Ziel
 // koennen ueber das Menue veraendert werden.
@@ -71,8 +71,8 @@ Adafruit_SH1106G display(128, 64, &Wire);
 const int SOIL_TROCKEN = 1020;
 const int SOIL_NASS    = 350;
 
-int SOIL_START = 700;
-int SOIL_ZIEL  = 350;
+int SOIL_START = 950;
+int SOIL_ZIEL  = 650;
 
 
 // =====================================================
