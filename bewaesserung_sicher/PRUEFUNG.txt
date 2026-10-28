@@ -1,0 +1,34 @@
+Pruefbericht Arduino-Bewaesserung, 27.10.2026
+
+Ziel: Arduino Uno / ATmega328P (arduino:avr:uno)
+Arduino AVR Boards: 1.8.8
+U8g2: 2.36.19
+
+Kompilierung erfolgreich, keine Sketch-Warnungen.
+Flash: 20.152 / 32.256 Byte (62 %)
+Statische RAM-Belegung inklusive OLED-Seitenpuffer: 1.105 / 2.048 Byte (53 %)
+Verbleibend fuer Stack und lokale Variablen: 943 Byte.
+
+16 bestandene Simulationen der tatsaechlichen Sketch-Funktionen:
+1. Startpause, fuenf erfolglose Runden und anschliessende 30-Minuten-Sperre
+2. Tank wird waehrend des Pumpens leer
+3. Feuchteziel nach Einziehzeit erreicht, anschliessend Erfolgspause
+4. Stundenbudget ausgeschoepft, kein sofortiger Neustart
+5. Pumpenrunde wird auf verbleibendes Budget verkuerzt
+6. Menue waehrend Einziehpause beendet und sperrt Bewaesserung
+7. EEPROM-Budgetreservierung, Wiederherstellung und defekte Gegenprobe
+8. Pumpentimer ueber den 32-Bit-millis-Ueberlauf hinweg
+9. Voller UART-Puffer verzoegert die Pumpenabschaltung nicht in der Simulation
+10. Fehlendes OLED verhindert Pumpenstart
+11. Bestehende Einstellungen und Statistik werden geladen
+12. Tank-Hysterese bei Zwischenwerten
+13. Volle Pumpenhistorie sperrt weitere Starts
+14. Budget wird erst nach Ablauf der Historienfrist wieder freigegeben
+15. Pumpenstatistik summiert Millisekundenreste statt jede Runde aufzurunden
+16. Alte Messzeile und neue Status-/Statistik-/Konfigurationszeilen
+
+AVR-static_assert bestaetigt die Kompatibilitaet der alten EEPROM-Strukturen.
+Host-Simulation mit Ersatzgeraeten fuer Sensoren, OLED, UART und EEPROM.
+Keine Messung der realen Reaktionszeiten oder der physikalischen Wassermenge.
+Kein Upload, keine Aenderung des laufenden Arduino-Programms.
+Reale Funktion von Relais, OLED, Sensoren und Pumpe muss am Aufbau getestet werden.
