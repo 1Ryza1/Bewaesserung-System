@@ -151,7 +151,10 @@ unsigned long letzterLEDWechsel = 0;
 
 byte menuSeite = 0;
 
-const byte MENU_SEITEN = 3;
+const byte MENU_SEITEN = 4;
+const byte VERLAUF_GROESSE = 60;
+byte verlauf[VERLAUF_GROESSE], verlaufKopf = 0, verlaufZahl = 0;
+unsigned long letzteVerlaufMessung = 0;
 
 
 // =====================================================
@@ -443,6 +446,12 @@ void allesMessen() {
   bodenMessen();
 
   tankMessen();
+  if (verlaufZahl == 0 || millis() - letzteVerlaufMessung >= 60000UL) {
+    verlauf[verlaufKopf] = constrain(map(bodenWert, SOIL_TROCKEN, SOIL_NASS, 0, 100), 0, 100);
+    verlaufKopf = (verlaufKopf + 1) % VERLAUF_GROESSE;
+    if (verlaufZahl < VERLAUF_GROESSE) verlaufZahl++;
+    letzteVerlaufMessung = millis();
+  }
 }
 
 
@@ -977,6 +986,17 @@ void einstellungenAnzeigen() {
 // OLED AKTUALISIEREN
 // =====================================================
 
+void oledVerlauf() {
+  display.setCursor(0, 0); display.print(F("BODEN / 60 MIN"));
+  display.drawLine(0, 62, 127, 62);
+  for (byte i = 1; i < verlaufZahl; ++i) {
+    byte a = (verlaufKopf + VERLAUF_GROESSE - verlaufZahl + i - 1) % VERLAUF_GROESSE;
+    byte b = (a + 1) % VERLAUF_GROESSE;
+    display.drawLine((i - 1) * 2, 61 - map(verlauf[a], 0, 100, 0, 49),
+                     i * 2, 61 - map(verlauf[b], 0, 100, 0, 49), SH110X_WHITE);
+  }
+}
+
 void oledAktualisieren() {
 
   display.clearDisplay();
@@ -1014,6 +1034,10 @@ void oledAktualisieren() {
 
       oledRohwerte();
 
+      break;
+
+    case 3:
+      oledVerlauf();
       break;
   }
 
